@@ -1,6 +1,7 @@
 #include "Module.h"
 #include "BluetoothJSONContainer.h"
 #include <dbus/dbus.h>
+#include <fstream>
 #include <gio/gio.h>
 #include <glib.h>
 #include <interfaces/IBluetooth.h>
@@ -17,6 +18,9 @@
 #define ROOT_OBJECT                     "/"
 #define DEVICE_ID                       "/org/bluez/hci0/dev_"
 #define THREAD_EXIT_LIMIT               100
+#define A2DP_AUDIO_SINK                 "0000110b-0000-1000-8000-00805f9b34fb"
+#define ASOUNDRC_FILE                   "/root/.asoundrc"
+#define DEVICE_ID_LENGTH                26
 
 namespace WPEFramework {
 
@@ -112,6 +116,7 @@ namespace Plugin {
         static void InterfacesAdded(GDBusConnection*, const gchar*, const gchar*, const gchar*, const gchar*, GVariant*, gpointer);
         static void InterfacesRemoved(GDBusConnection*, const gchar*, const gchar*, const gchar*, const gchar*, GVariant*, gpointer);
         bool GetManagedObjects();
+        bool UpdateAudioSink();
         bool IsScanning() { return _isScanning; };
         string Connected() { return _connected; };
 
@@ -124,9 +129,9 @@ namespace Plugin {
         bool _isScanning;
         string _connected;
         static std::map<string, string> _discoveredDeviceIdMap;
-        static std::map<string, string> _pairedDeviceIdMap;
         static Core::JSON::ArrayType<BTDeviceList::BTDeviceInfo> _jsonDiscoveredDevices;
-        static Core::JSON::ArrayType<BTDeviceList::BTDeviceInfo> _jsonPairedDevices;
+        std::map<string, std::pair<string, std::unordered_set<string>>> _pairedDeviceInfoMap;
+        Core::JSON::ArrayType<BTDeviceList::BTDeviceInfo> _jsonPairedDevices;
     };
 
 } /* namespace WPEFramework::Plugin */

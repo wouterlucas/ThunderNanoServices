@@ -164,7 +164,7 @@ Display::SurfaceImplementation::RaspberryPiClient::RaspberryPiClient(
 
     graphics_get_display_size(0, &_screenWidth, &_screenHeight);
     VC_DISPMANX_ALPHA_T alpha = {
-            DISPMANX_FLAGS_ALPHA_FIXED_ALL_PIXELS,
+            static_cast<DISPMANX_FLAGS_ALPHA_T>(DISPMANX_FLAGS_ALPHA_FROM_SOURCE),
             255,
             0
     };

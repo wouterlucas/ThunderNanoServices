@@ -1,5 +1,6 @@
 #include "Implementation.h"
 #include <virtualinput/virtualinput.h>
+#include <fstream>
 
 int g_pipefd[2];
 struct Message {
@@ -258,6 +259,7 @@ void Display::SurfaceImplementation::RaspberryPiClient::SetTop() {
 
 void Display::SurfaceImplementation::RaspberryPiClient::SetInput() {
     _parent.SetInput();
+    WRITE_SURFACE_NAME(_name);
 }
 
 void Display::SurfaceImplementation::RaspberryPiClient::Visible(
@@ -333,15 +335,23 @@ int Display::Process(const uint32_t data) {
     if ((data != 0) && (g_pipefd[0] != -1) &&
             (read(g_pipefd[0], &message, sizeof(message)) > 0)) {
 
-        std::list<SurfaceImplementation*>::iterator index(_surfaces.begin());
-          while (index != _surfaces.end()) {
-                // RELEASED  = 0,
-                // PRESSED   = 1,
-                // REPEAT    = 2,
+        std::string inputSurface;
+        READ_SURFACE_NAME(inputSurface);
 
-                (*index)->SendKey (message.code, (message.type == 0 ? IDisplay::IKeyboard::released : IDisplay::IKeyboard::pressed), time(nullptr));
-                index++;
+        std::list<SurfaceImplementation*>::iterator index(_surfaces.begin());
+        while (index != _surfaces.end()) {
+            // RELEASED  = 0,
+            // PRESSED   = 1,
+            // REPEAT    = 2,
+            if (inputSurface.compare((*index)->Name()) == 0) {
+                (*index)->SendKey(
+                        message.code, (message.type == 0 ?
+                                IDisplay::IKeyboard::released : IDisplay::IKeyboard::pressed),
+                                time(nullptr));
+                break;
             }
+            index++;
+        }
     }
     return (0);
 }

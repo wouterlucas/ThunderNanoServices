@@ -14,6 +14,18 @@
 namespace WPEFramework {
 namespace Rpi {
 
+#define WRITE_SURFACE_NAME(name) { \
+        std::ofstream out("/tmp/RPI-Surface"); \
+        out << name; \
+        out.close(); \
+        }
+
+#define READ_SURFACE_NAME(name) { \
+        std::ifstream in("/tmp/RPI-Surface"); \
+        std::getline(in, name); \
+        in.close(); \
+        }
+
 class AccessorCompositor;
 
 class Display : public Compositor::IDisplay {

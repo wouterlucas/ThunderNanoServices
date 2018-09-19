@@ -218,7 +218,7 @@ private:
         _inputSurface = surface;
     }
     int32_t getLayerNum() {
-        return _glayerNum++;
+        return _glayerNum;
     }
 
     const std::string _displayName;

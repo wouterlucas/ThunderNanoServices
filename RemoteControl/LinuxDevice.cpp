@@ -3,6 +3,9 @@
 #include <libudev.h>
 #include <linux/uinput.h>
 #include <interfaces/IKeyHandler.h>
+#include <thread>
+
+#define TIMEOUT 5
 
 namespace WPEFramework {
 namespace Plugin {
@@ -10,9 +13,38 @@ namespace Plugin {
     static char Locator[] = _T("/dev/input");
 
     class LinuxDevice : public Exchange::IKeyProducer, Core::Thread {
+    public:
+        enum state {
+        STOP,
+        START
+        };
     private:
         LinuxDevice(const LinuxDevice&) = delete;
         LinuxDevice& operator=(const LinuxDevice&) = delete;
+
+        class Timer {
+            private:
+                unsigned long begTime;
+            public:
+                void start() {
+                    LinuxDevice::SetTimerStarted(START);
+                    begTime = clock();
+                }
+
+                unsigned long elapsedTime() {
+                    return ((unsigned long) clock() - begTime) / CLOCKS_PER_SEC;
+                }
+
+                bool isTimeout(unsigned long seconds) {
+                    unsigned long elTime =elapsedTime();
+                    return elapsedTime() >= seconds;
+                }
+
+                void stop() {
+                    LinuxDevice::SetTimerStarted(STOP);
+                    begTime = 0;
+                }
+        };
 
     public:
         LinuxDevice()
@@ -44,6 +76,8 @@ namespace Plugin {
                 _update = udev_monitor_get_fd(_monitor);
 
                 udev_unref(udev);
+                std::thread timerThread(&LinuxDevice::TimeoutHandler, this);
+                timerThread.detach();
                 Remotes::RemoteAdministrator::Instance().Announce(*this);
             }
         }
@@ -71,6 +105,35 @@ namespace Plugin {
         }
 
     public:
+        inline static void SetTimerStarted(bool value)
+        {
+            _isTimerStarted = value;
+        }
+        inline static bool GetTimerStarted()
+        {
+            return _isTimerStarted;
+        }
+        void TimeoutHandler()
+        {
+            while (true) {
+                if(GetTimerStarted()) {
+                    while(_timer.isTimeout(TIMEOUT)) {
+                        if(GetTimerStarted()) {
+                            _counter = 0;
+                            _timer.stop();
+                            printf("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+                            _callback->KeyEvent(false, _code, Name());
+                            _isReleased = true;
+                        }
+                        if (!_counter)
+                            break;
+                    }
+                }
+                else {
+                    sleep(1);
+                }
+            }
+        }
         virtual const TCHAR* Name() const
         {
             return (_T("DevInput"));
@@ -240,10 +303,36 @@ namespace Plugin {
                     // Repeat gets constructed by the framework anyway.
                     if ( (entry[index].type == EV_KEY) && (entry[index].value != 2) ) {
 
-                        const uint16_t code = entry[index].code;
+                        //const uint16_t code = entry[index].code;
+                        uint16_t code = _code;
+                        _code = entry[index].code;
                         const bool pressed  = entry[index].value != 0;
-                        TRACE(Trace::Information, (_T("Sending pressed: %s, code: 0x%04X"), (pressed ? _T("true") : _T("false")), code));
-                        _callback->KeyEvent(pressed, code, Name());
+                        //TRACE(Trace::Information, (_T("Sending pressed: %s, code: 0x%04X"), (pressed ? _T("true") : _T("false")), _code));
+                        if(pressed)
+                            _counter++;
+                        else {
+                            _counter = 0;
+                            _timer.stop();
+                        }
+                        if (pressed) {
+                            if (_counter == 1) {
+                                _timer.start();
+                                _isReleased = false;
+                           }
+                        }
+                        if (!_isReleased || (_code!=_code)) {
+                           if(_isTimerStarted && (_counter > 1)) {
+                                //_counter = 0;
+                                _timer.stop();
+                                printf("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+                                _callback->KeyEvent(false, code, Name());
+                            }
+                            //if ((_counter ==0 || _counter == 1 )&& !_isReleased) {
+                            //if (_counter ==0 || _counter == 1 ) {
+                                printf("%s:%s:%d\n",__FILE__,__func__,__LINE__);
+                               _callback->KeyEvent(pressed, _code, Name());
+                            //}
+                        }
                     }
                     index++;
                     result -= sizeof(input_event);
@@ -258,9 +347,17 @@ namespace Plugin {
                 udev_monitor* _monitor;
                 int _update;
         Exchange::IKeyHandler* _callback;
+        Timer _timer;
+        static bool _isTimerStarted;
+        static int _counter;
+        static uint16_t _code;
+        static bool _isReleased;
     };
 
     static LinuxDevice* _singleton(Core::Service<LinuxDevice>::Create<LinuxDevice>());
-
+    bool LinuxDevice::_isTimerStarted = STOP;
+    bool LinuxDevice::_isReleased = false;
+    int LinuxDevice::_counter = 0;
+    uint16_t LinuxDevice::_code = 0;
 }
 }
